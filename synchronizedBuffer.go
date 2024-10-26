@@ -14,13 +14,12 @@ var DEFAULT_FLUSH_TIME = 1
 // It flushes either when the buffer is full or on a time interval, and supports
 // graceful shutdown to ensure all data is processed before exit.
 type SynchronizedBuffer[T any] struct {
-	buffer         []T             // Buffer to store objects of type T
-	mu             sync.Mutex      // Mutex to synchronize access to the buffer
-	bufferFullChan chan struct{}   // Channel to signal when the buffer is full
-	shutdownChan   chan struct{}   // Channel to signal a graceful shutdown
-	wg             *sync.WaitGroup // WaitGroup to ensure all data is processed
-	closeOnce      sync.Once       // Ensures shutdownChan is closed only once
-	options        BufferOptions   // Buffer configuration options
+	buffer         []T                // Buffer to store objects of type T
+	mu             sync.Mutex         // Mutex to synchronize access to the buffer
+	bufferFullChan chan struct{}      // Channel to signal when the buffer is full
+	wg             *sync.WaitGroup    // WaitGroup to ensure all data is processed
+	cancelFunc     context.CancelFunc // Context cancel function for graceful shutdown
+	options        BufferOptions      // Buffer configuration options
 }
 
 // BufferOptions struct holds configurable settings for the buffer.
@@ -66,6 +65,9 @@ func New[T any](ctx context.Context, flushFunc func([]T), opts ...OptionFunc) *S
 		ctx = context.Background()
 	}
 
+	// Create a cancelable context
+	ctx, cancelFunc := context.WithCancel(ctx)
+
 	// Initialize WaitGroup to track completion of flush operations
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -74,8 +76,8 @@ func New[T any](ctx context.Context, flushFunc func([]T), opts ...OptionFunc) *S
 	b := &SynchronizedBuffer[T]{
 		buffer:         make([]T, 0, options.maxSize),
 		bufferFullChan: make(chan struct{}, 1),
-		shutdownChan:   make(chan struct{}),
 		wg:             &wg,
+		cancelFunc:     cancelFunc,
 		options:        options,
 	}
 
@@ -86,11 +88,8 @@ func New[T any](ctx context.Context, flushFunc func([]T), opts ...OptionFunc) *S
 }
 
 // Close signals a graceful shutdown of the buffer, flushing any remaining items.
-// Ensures Close is only triggered once by using sync.Once.
 func (b *SynchronizedBuffer[T]) Close() {
-	b.closeOnce.Do(func() {
-		close(b.shutdownChan)
-	})
+	b.cancelFunc()
 }
 
 // Wait blocks until all buffered data has been flushed and processed.
@@ -146,13 +145,7 @@ func (b *SynchronizedBuffer[T]) startFlusher(ctx context.Context, flushFunc func
 	for {
 		select {
 		case <-ctx.Done():
-			// On context cancellation (e.g., app shutdown), flush remaining data
-			if data := b.Flush(); data != nil {
-				flushFunc(data)
-			}
-			return
-		case <-b.shutdownChan:
-			// On explicit Close call, flush remaining data
+			// On context cancellation, flush remaining data
 			if data := b.Flush(); data != nil {
 				flushFunc(data)
 			}
