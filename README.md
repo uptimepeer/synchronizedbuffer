@@ -14,7 +14,7 @@
 To install the library, use:
 
 ```bash
-go get github.com/uptimepeer/synchronizedbuffer
+go get -u github.com/uptimepeer/synchronizedbuffer
 ```
 
 ## Usage
@@ -75,11 +75,11 @@ func main() {
     // Close and wait to gracefully flush remaining data
     buffer.Close()
     buffer.Wait()
-
+	fmt.Println("All data flushed.")
 }
 ```
 
-**Note**: The buffer can be shut down either by calling the `Close()` function or by canceling the provided context. If no context operation is required, it is safe to pass `nil` for the context when creating a new buffer.
+> **Note**: The buffer can be shut down either by calling the `Close()` function or by canceling the provided context. If no context operation is required, it is safe to pass `nil` for the context when creating a new buffer.
 
 ### Graceful Shutdown
 
@@ -93,7 +93,7 @@ buffer.Close()
 buffer.Wait()
 ```
 
-**Note**: If the buffer is closed by canceling the context (using the `cancel()` function), you do not need to call `Close()` again. 
+> **Note**: If the buffer is closed by canceling the context (using the `cancel()` function), you do not need to call `Close()` again. 
 
 ### Configuration Options
 
@@ -103,7 +103,7 @@ You can customize the behavior of `SynchronizedBuffer` by passing options when i
 - **WithMaxSize(int)**: Set the maximum buffer capacity. When this limit is reached, the buffer flushes automatically.
 - **WithFlushTime(time.Duration)**: Set a time interval for automatic flushes, even if the buffer is not full.
 
-**Note**: If options are not provided, default value for buffer size is 100 and defult value for flush time is 1 second.
+> **Note**: If options are not provided, default value for `MaxSize` is 100 and defult value for `FlushTime` is 1 second.
 
 ### Example with Options
 
@@ -161,7 +161,6 @@ func (b *SynchronizedBuffer[T]) Wait()
 ```
 
 Blocks until all buffered data has been processed. Call after `Close()` to ensure all items have been flushed.
-
 
 ## Contributing
 
